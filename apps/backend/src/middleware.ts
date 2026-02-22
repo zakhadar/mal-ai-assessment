@@ -1,11 +1,24 @@
 import { Request, Response, NextFunction } from "express";
 import { ApiErrorResponse } from "@mal-assessment/shared";
 import { db } from "./db";
+import { randomUUID } from "crypto";
 
 export interface AuthRequest extends Request {
   userId?: string;
   accessToken?: string;
+  requestId?: string;
 }
+
+// ============ CORRELATION ID MIDDLEWARE ============
+export const correlationIdMiddleware = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  req.requestId = req.headers["x-request-id"] as string || randomUUID().substring(0, 8);
+  res.setHeader("X-Request-ID", req.requestId);
+  next();
+};
 
 // ============ ERROR HANDLER ============
 export class ApiError extends Error {
@@ -22,11 +35,17 @@ export class ApiError extends Error {
 
 export const errorHandler = (
   err: any,
-  _req: Request,
+  req: AuthRequest,
   res: Response,
   _next: NextFunction
 ) => {
-  console.error("[Error]", err);
+  const requestId = req.requestId || "unknown";
+  
+  console.error(`[${requestId}] [Error]`, err.message, {
+    code: err.code,
+    statusCode: err.statusCode,
+    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+  });
 
   if (err instanceof ApiError) {
     const response: ApiErrorResponse = {
@@ -56,9 +75,11 @@ export const authMiddleware = (
   res: Response,
   next: NextFunction
 ) => {
+  const requestId = req.requestId || "unknown";
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.warn(`[${requestId}] Missing or invalid authorization header`);
     return next(
       new ApiError("UNAUTHORIZED", "Missing or invalid authorization header", 401)
     );
@@ -68,10 +89,12 @@ export const authMiddleware = (
   const validation = db.validateAccessToken(accessToken);
 
   if (!validation) {
+    console.warn(`[${requestId}] Invalid access token`);
     return next(new ApiError("UNAUTHORIZED", "Invalid access token", 401));
   }
 
   if (validation.isExpired) {
+    console.warn(`[${requestId}] Access token has expired for user ${validation.userId}`);
     return next(
       new ApiError("TOKEN_EXPIRED", "Access token has expired", 401)
     );
@@ -84,16 +107,21 @@ export const authMiddleware = (
 
 // ============ REQUEST LOGGER ============
 export const requestLogger = (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
   const start = Date.now();
+  const requestId = randomUUID().substring(0, 8);
+  req.requestId = requestId;
+
   res.on("finish", () => {
     const duration = Date.now() - start;
+    const logLevel = res.statusCode >= 400 ? "WARN" : "INFO";
     console.log(
-      `[${req.method}] ${req.path} - ${res.statusCode} (${duration}ms)`
+      `[${logLevel}] [${requestId}] ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`
     );
   });
+
   next();
 };

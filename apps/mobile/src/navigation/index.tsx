@@ -7,6 +7,8 @@ import LoginScreen from "../screens/LoginScreen";
 import HomeScreen from "../screens/HomeScreen";
 import OnboardingScreen from "../screens/OnboardingScreen";
 import SettingsScreen from "../screens/SettingsScreen";
+import SessionExpiredScreen from "../screens/SessionExpiredScreen";
+import { useAuthStore } from "../stores/authStore";
 
 const Stack = createStackNavigator<any>();
 const Tab = createBottomTabNavigator<any>();
@@ -21,6 +23,20 @@ function AuthStack() {
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen as any} />
+    </Stack.Navigator>
+  );
+}
+
+// Session Expired Stack
+function SessionExpiredStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animationEnabled: true,
+      }}
+    >
+      <Stack.Screen name="SessionExpired" component={SessionExpiredScreen as any} />
     </Stack.Navigator>
   );
 }
@@ -80,11 +96,16 @@ function AppStack() {
   );
 }
 
-// Root Navigator
-export function RootNavigator({ isLoggedIn }: { isLoggedIn: boolean }) {
+// Root Navigator with Route Guards
+export function RootNavigator() {
+  const authStatus = useAuthStore((state) => state.status);
+
   return (
     <NavigationContainer>
-      {isLoggedIn ? <AppStack /> : <AuthStack />}
+      {authStatus === "expired" && <SessionExpiredStack />}
+      {authStatus === "logged_in" && <AppStack />}
+      {(authStatus === "logged_out" || authStatus === "logging_in" || authStatus === "refreshing") && <AuthStack />}
     </NavigationContainer>
   );
 }
+
