@@ -1,20 +1,27 @@
-import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
-import { API_URL } from "./src/config";
+import { useEffect } from "react";
+import { StatusBar } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { RootNavigator } from "./src/navigation";
+import { useAuthStore } from "./src/stores/authStore";
+import { useThemeStore, getThemeColors } from "./src/stores/themeStore";
 
 export default function App() {
-  const [status, setStatus] = useState("");
+  const authStatus = useAuthStore((state) => state.status);
+  const theme = useThemeStore((state) => state.theme);
+  const colors = getThemeColors(theme);
 
-  useEffect(() => {
-    fetch(`${API_URL}/health`)
-      .then((res) => res.json())
-      .then((data) => setStatus(data.status))
-      .catch(console.error);
-  }, []);
+  const isLoggedIn = authStatus === "logged_in";
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <Text>Backend Status: {status}</Text>
-    </View>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <StatusBar
+          barStyle={theme === "dark" ? "light-content" : "dark-content"}
+          backgroundColor={colors.background}
+        />
+        <RootNavigator isLoggedIn={isLoggedIn} />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
